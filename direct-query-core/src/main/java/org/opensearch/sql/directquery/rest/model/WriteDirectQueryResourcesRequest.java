@@ -5,22 +5,22 @@
 
 package org.opensearch.sql.directquery.rest.model;
 
-import java.util.Map;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.util.Map;
 
 @Data
 @NoArgsConstructor
 //TODO: @ashisagr add a WriteDQRRequest
-public class GetDirectQueryResourcesRequest {
+public class WriteDirectQueryResourcesRequest {
   private String dataSource;
   private DirectQueryResourceType resourceType;
   private String resourceName;
+  private String request;
 
   // Optional fields
-  private Map<String, String> queryParams;
-//  private String nextToken;
-//  private Map<String, String> requestOptions;
+  private Map<String, String> requestOptions;
 
   /**
    * Sets the resource type from a string value.

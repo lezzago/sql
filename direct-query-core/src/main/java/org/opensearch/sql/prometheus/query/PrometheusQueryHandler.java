@@ -26,6 +26,7 @@ import org.opensearch.sql.prometheus.model.MetricMetadata;
 import org.opensearch.sql.prometheus.model.PrometheusOptions;
 import org.opensearch.sql.prometheus.model.PrometheusQueryType;
 
+//TODO: refactor to read resources and write resources handlers for the read and write functionalities
 public class PrometheusQueryHandler implements QueryHandler<PrometheusClient> {
   private static final Logger LOG = LogManager.getLogger(PrometheusQueryHandler.class);
 
@@ -188,5 +189,84 @@ public class PrometheusQueryHandler implements QueryHandler<PrometheusClient> {
                         request.getResourceType(), e.getMessage()));
               }
             });
+  }
+
+//  @Override
+//  public GetDirectQueryResourcesResponse<?> writeResources(
+//          PrometheusClient client, GetDirectQueryResourcesRequest request) {
+//    return AccessController.doPrivileged(
+//            (PrivilegedAction<GetDirectQueryResourcesResponse<?>>)
+//                    () -> {
+//                      try {
+//                        if (request.getResourceType() == null) {
+//                          throw new IllegalArgumentException("Resource type cannot be null");
+//                        }
+//
+//                        switch (request.getResourceType()) {
+//                          case LABELS:
+//                          {
+//                            List<String> labels = client.getLabels(request.getQueryParams());
+//                            return GetDirectQueryResourcesResponse.withStringList(labels);
+//                          }
+//                          case LABEL:
+//                          {
+//                            List<String> labelValues =
+//                                    client.getLabel(request.getResourceName(), request.getQueryParams());
+//                            return GetDirectQueryResourcesResponse.withStringList(labelValues);
+//                          }
+//                          case METADATA:
+//                          {
+//                            Map<String, List<MetricMetadata>> metadata =
+//                                    client.getAllMetrics(request.getQueryParams());
+//                            return GetDirectQueryResourcesResponse.withMap(metadata);
+//                          }
+//                          case SERIES:
+//                          {
+//                            List<Map<String, String>> series = client.getSeries(request.getQueryParams());
+//                            return GetDirectQueryResourcesResponse.withList(series);
+//                          }
+//                          case ALERTS:
+//                          {
+//                            JSONObject alerts = client.getAlerts();
+//                            return GetDirectQueryResourcesResponse.withMap(alerts.toMap());
+//                          }
+//                          case RULES:
+//                          {
+//                            JSONObject rules = client.getRules(request.getQueryParams());
+//                            return GetDirectQueryResourcesResponse.withMap(rules.toMap());
+//                          }
+//                          case ALERTMANAGER_ALERTS:
+//                          {
+//                            JSONArray alerts = client.getAlertmanagerAlerts(request.getQueryParams());
+//                            return GetDirectQueryResourcesResponse.withList(alerts.toList());
+//                          }
+//                          case ALERTMANAGER_ALERT_GROUPS:
+//                          {
+//                            JSONArray alertGroups =
+//                                    client.getAlertmanagerAlertGroups(request.getQueryParams());
+//                            return GetDirectQueryResourcesResponse.withList(alertGroups.toList());
+//                          }
+//                          case ALERTMANAGER_RECEIVERS:
+//                          {
+//                            JSONArray receivers = client.getAlertmanagerReceivers();
+//                            return GetDirectQueryResourcesResponse.withList(receivers.toList());
+//                          }
+//                          case ALERTMANAGER_SILENCES:
+//                          {
+//                            JSONArray silences = client.getAlertmanagerSilences();
+//                            return GetDirectQueryResourcesResponse.withList(silences.toList());
+//                          }
+//                          default:
+//                            throw new IllegalArgumentException(
+//                                    "Invalid prometheus resource type: " + request.getResourceType());
+//                        }
+//                      } catch (IOException e) {
+//                        LOG.error("Error getting resources", e);
+//                        throw new org.opensearch.sql.prometheus.exception.PrometheusClientException(
+//                                String.format(
+//                                        "Error while getting resources for %s: %s",
+//                                        request.getResourceType(), e.getMessage()));
+//                      }
+//                    });
   }
 }

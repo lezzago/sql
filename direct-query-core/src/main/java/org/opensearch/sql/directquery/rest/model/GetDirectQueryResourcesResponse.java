@@ -22,6 +22,9 @@ import lombok.NoArgsConstructor;
 public class GetDirectQueryResourcesResponse<T> {
   private T data;
 
+  //Optional field
+//  private String nextToken;
+
   private GetDirectQueryResourcesResponse(T data) {
     this.data = data;
   }

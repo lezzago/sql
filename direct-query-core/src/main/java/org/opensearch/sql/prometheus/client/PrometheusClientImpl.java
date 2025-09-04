@@ -84,6 +84,16 @@ public class PrometheusClientImpl implements PrometheusClient {
 
     logger.debug("Making Prometheus query_range request: {}", queryUrl);
     Request request = new Request.Builder().url(queryUrl).build();
+//    logger.info("right before query url build");
+//    Request request;
+//    try {
+//      request = new Request.Builder().url(queryUrl).build();
+//    } catch (Exception e){
+//      logger.error("Faced exception: {}", e.getMessage());
+//      e.printStackTrace();
+//      throw e;
+//    }
+//    logger.info("right after query url build");
 
     logger.debug("Executing Prometheus request with headers: {}", request.headers().toString());
     Response response = this.prometheusHttpClient.newCall(request).execute();

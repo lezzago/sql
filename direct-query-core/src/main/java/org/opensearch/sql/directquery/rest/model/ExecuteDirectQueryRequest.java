@@ -25,6 +25,7 @@ public class ExecuteDirectQueryRequest {
   // Optional fields
   private Integer maxResults; // Optional: limit for Prometheus, maxDataPoints for CW
   private Integer timeout; // Optional: number of seconds
+  // TODO: @ashisagr add queryOption to be similar with DQS
   private DataSourceOptions options; // Optional: Source specific arguments
   private String sessionId; // For session management
 
