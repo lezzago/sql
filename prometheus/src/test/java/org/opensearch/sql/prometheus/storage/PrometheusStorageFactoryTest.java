@@ -214,6 +214,118 @@ public class PrometheusStorageFactoryTest {
   }
 
   @Test
+  @SneakyThrows
+  void testGetStorageEngineWithExplicitCortexRulerType() {
+    when(settings.getSettingValue(Settings.Key.DATASOURCES_URI_HOSTS_DENY_LIST))
+        .thenReturn(Collections.emptyList());
+    PrometheusStorageFactory prometheusStorageFactory = new PrometheusStorageFactory(settings);
+    HashMap<String, String> properties = new HashMap<>();
+    properties.put("prometheus.uri", "http://localhost:9090");
+    properties.put("prometheus.ruler.type", "cortex");
+    StorageEngine storageEngine = prometheusStorageFactory.getStorageEngine(properties);
+    Assertions.assertTrue(storageEngine instanceof PrometheusStorageEngine);
+  }
+
+  @Test
+  @SneakyThrows
+  void testGetStorageEngineWithAmpRulerType() {
+    when(settings.getSettingValue(Settings.Key.DATASOURCES_URI_HOSTS_DENY_LIST))
+        .thenReturn(Collections.emptyList());
+    PrometheusStorageFactory prometheusStorageFactory = new PrometheusStorageFactory(settings);
+    HashMap<String, String> properties = new HashMap<>();
+    properties.put("prometheus.uri",
+        "https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-abc");
+    properties.put("prometheus.auth.type", "awssigv4");
+    properties.put("prometheus.auth.region", "us-east-1");
+    properties.put("prometheus.auth.access_key", "accessKey");
+    properties.put("prometheus.auth.secret_key", "secretKey");
+    properties.put("prometheus.ruler.type", "amp");
+    properties.put("prometheus.ruler.workspace_id", "ws-abc");
+    properties.put("prometheus.ruler.endpoint", "https://aps.us-east-1.amazonaws.com");
+    StorageEngine storageEngine = prometheusStorageFactory.getStorageEngine(properties);
+    Assertions.assertTrue(storageEngine instanceof PrometheusStorageEngine);
+  }
+
+  @Test
+  @SneakyThrows
+  void testGetStorageEngineWithAmpRulerMissingWorkspaceId() {
+    when(settings.getSettingValue(Settings.Key.DATASOURCES_URI_HOSTS_DENY_LIST))
+        .thenReturn(Collections.emptyList());
+    PrometheusStorageFactory prometheusStorageFactory = new PrometheusStorageFactory(settings);
+    HashMap<String, String> properties = new HashMap<>();
+    properties.put("prometheus.uri", "https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-abc");
+    properties.put("prometheus.auth.type", "awssigv4");
+    properties.put("prometheus.auth.region", "us-east-1");
+    properties.put("prometheus.auth.access_key", "accessKey");
+    properties.put("prometheus.auth.secret_key", "secretKey");
+    properties.put("prometheus.ruler.type", "amp");
+    properties.put("prometheus.ruler.endpoint", "https://aps.us-east-1.amazonaws.com");
+    IllegalArgumentException exception =
+        Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> prometheusStorageFactory.getStorageEngine(properties));
+    Assertions.assertTrue(exception.getMessage().contains("prometheus.ruler.workspace_id"));
+  }
+
+  @Test
+  @SneakyThrows
+  void testGetStorageEngineWithAmpRulerMissingEndpoint() {
+    when(settings.getSettingValue(Settings.Key.DATASOURCES_URI_HOSTS_DENY_LIST))
+        .thenReturn(Collections.emptyList());
+    PrometheusStorageFactory prometheusStorageFactory = new PrometheusStorageFactory(settings);
+    HashMap<String, String> properties = new HashMap<>();
+    properties.put("prometheus.uri", "https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-abc");
+    properties.put("prometheus.auth.type", "awssigv4");
+    properties.put("prometheus.auth.region", "us-east-1");
+    properties.put("prometheus.auth.access_key", "accessKey");
+    properties.put("prometheus.auth.secret_key", "secretKey");
+    properties.put("prometheus.ruler.type", "amp");
+    properties.put("prometheus.ruler.workspace_id", "ws-abc");
+    IllegalArgumentException exception =
+        Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> prometheusStorageFactory.getStorageEngine(properties));
+    Assertions.assertTrue(exception.getMessage().contains("prometheus.ruler.endpoint"));
+  }
+
+  @Test
+  @SneakyThrows
+  void testGetStorageEngineWithUnknownRulerType() {
+    when(settings.getSettingValue(Settings.Key.DATASOURCES_URI_HOSTS_DENY_LIST))
+        .thenReturn(Collections.emptyList());
+    PrometheusStorageFactory prometheusStorageFactory = new PrometheusStorageFactory(settings);
+    HashMap<String, String> properties = new HashMap<>();
+    properties.put("prometheus.uri", "http://localhost:9090");
+    properties.put("prometheus.ruler.type", "unknown");
+    IllegalArgumentException exception =
+        Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> prometheusStorageFactory.getStorageEngine(properties));
+    Assertions.assertTrue(exception.getMessage().contains("prometheus.ruler.type"));
+  }
+
+  @Test
+  @SneakyThrows
+  void testGetStorageEngineAmpRulerRejectsDeniedEndpointHost() {
+    // Deny list targets the ruler-endpoint host only; prometheus.uri stays allowed.
+    when(settings.getSettingValue(Settings.Key.DATASOURCES_URI_HOSTS_DENY_LIST))
+        .thenReturn(Collections.singletonList("127.0.0.0/8"));
+    PrometheusStorageFactory prometheusStorageFactory = new PrometheusStorageFactory(settings);
+    HashMap<String, String> properties = new HashMap<>();
+    properties.put("prometheus.uri", "https://opensearch.org");
+    properties.put("prometheus.ruler.type", "amp");
+    properties.put("prometheus.ruler.workspace_id", "ws-abc");
+    properties.put("prometheus.ruler.endpoint", "https://127.0.0.1:4443");
+    RuntimeException exception =
+        Assertions.assertThrows(
+            RuntimeException.class,
+            () -> prometheusStorageFactory.getStorageEngine(properties));
+    Assertions.assertTrue(
+        exception.getMessage().contains("Disallowed hostname in the uri"),
+        "Got message: " + exception.getMessage());
+  }
+
+  @Test
   void createDataSourceWithHostnameNotMatchingWithAllowHostsConfig() {
     when(settings.getSettingValue(Settings.Key.DATASOURCES_URI_HOSTS_DENY_LIST))
         .thenReturn(Collections.singletonList("127.0.0.0/8"));

@@ -22,6 +22,9 @@ import org.opensearch.sql.datasource.model.DataSourceMetadata;
 import org.opensearch.sql.datasources.auth.AuthenticationType;
 import org.opensearch.sql.prometheus.client.PrometheusClient;
 import org.opensearch.sql.prometheus.client.PrometheusClientImpl;
+import org.opensearch.sql.prometheus.client.ruler.AmpRulerClient;
+import org.opensearch.sql.prometheus.client.ruler.CortexRulerClient;
+import org.opensearch.sql.prometheus.client.ruler.RulerClient;
 
 /*
  * @opensearch.experimental
@@ -40,6 +43,13 @@ public class PrometheusClientUtils {
   // Prometheus URI constants
   public static final String PROMETHEUS_URI = "prometheus.uri";
   public static final String RULER_URI = "prometheus.ruler.uri";
+
+  // Ruler selection constants
+  public static final String RULER_TYPE = "prometheus.ruler.type";
+  public static final String RULER_WORKSPACE_ID = "prometheus.ruler.workspace_id";
+  public static final String RULER_ENDPOINT = "prometheus.ruler.endpoint";
+  public static final String RULER_TYPE_CORTEX = "cortex";
+  public static final String RULER_TYPE_AMP = "amp";
 
   // AlertManager constants
   public static final String ALERTMANAGER_URI = "alertmanager.uri";
@@ -165,7 +175,39 @@ public class PrometheusClientUtils {
     String rulerHost = properties.get(PrometheusClientUtils.RULER_URI);
     URI rulerUri = rulerHost != null ? URI.create(rulerHost) : uri;
 
+    RulerClient rulerClient =
+        buildRulerClient(properties, settings, prometheusHttpClient, rulerUri);
+
     return new PrometheusClientImpl(
-        prometheusHttpClient, uri, alertmanagerHttpClient, alertmanagerUri, rulerUri);
+        prometheusHttpClient, uri, alertmanagerHttpClient, alertmanagerUri, rulerClient);
+  }
+
+  private static RulerClient buildRulerClient(
+      Map<String, String> properties,
+      Settings settings,
+      OkHttpClient prometheusHttpClient,
+      URI rulerUri) {
+    String rulerType = properties.get(RULER_TYPE);
+    if (rulerType == null || RULER_TYPE_CORTEX.equalsIgnoreCase(rulerType)) {
+      return new CortexRulerClient(prometheusHttpClient, rulerUri);
+    }
+    if (!RULER_TYPE_AMP.equalsIgnoreCase(rulerType)) {
+      throw new IllegalArgumentException(
+          String.format(
+              "Unsupported %s value '%s'. Supported values: %s, %s.",
+              RULER_TYPE, rulerType, RULER_TYPE_CORTEX, RULER_TYPE_AMP));
+    }
+    String workspaceId = properties.get(RULER_WORKSPACE_ID);
+    String controlPlaneEndpoint = properties.get(RULER_ENDPOINT);
+    if (workspaceId == null || controlPlaneEndpoint == null) {
+      throw new IllegalArgumentException(
+          String.format(
+              "%s=amp requires both %s and %s to be set.",
+              RULER_TYPE, RULER_WORKSPACE_ID, RULER_ENDPOINT));
+    }
+    URI controlPlaneUri = URI.create(controlPlaneEndpoint);
+    OkHttpClient controlPlaneHttpClient = getHttpClient(properties, settings);
+    RulerClient readDelegate = new CortexRulerClient(prometheusHttpClient, rulerUri);
+    return new AmpRulerClient(controlPlaneHttpClient, controlPlaneUri, workspaceId, readDelegate);
   }
 }

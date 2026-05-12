@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import okhttp3.Call;
 import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
@@ -34,6 +35,8 @@ import org.json.JSONObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.opensearch.sql.prometheus.client.ruler.RulerClient;
 import org.opensearch.sql.prometheus.exception.PrometheusClientException;
 
 /*
@@ -1118,5 +1121,57 @@ public class PrometheusClientImplTest {
         assertThrows(
             PrometheusClientException.class, () -> nullBodyClient.getAlertmanagerStatus());
     assertTrue(exception.getMessage().contains("No response body"));
+  }
+
+  @Test
+  public void testRulerMethodsDelegateToInjectedRulerClient() throws IOException {
+    RulerClient rulerMock = org.mockito.Mockito.mock(RulerClient.class);
+    JSONObject groupsStub = new JSONObject().put("groups", new JSONArray());
+    org.mockito.Mockito.when(rulerMock.getRules(org.mockito.ArgumentMatchers.anyMap()))
+        .thenReturn(groupsStub);
+    org.mockito.Mockito.when(
+            rulerMock.getRulesByNamespace(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyMap()))
+        .thenReturn(groupsStub);
+    org.mockito.Mockito.when(
+            rulerMock.createOrUpdateRuleGroup(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn("ok");
+    org.mockito.Mockito.when(
+            rulerMock.deleteRuleNamespace(org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn("ok");
+    org.mockito.Mockito.when(
+            rulerMock.deleteRuleGroup(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn("ok");
+
+    OkHttpClient httpClient = new OkHttpClient.Builder().build();
+    URI baseUri =
+        URI.create(String.format("http://%s:%s", "localhost", mockWebServer.getPort()));
+    PrometheusClientImpl delegating =
+        new PrometheusClientImpl(httpClient, baseUri, httpClient, baseUri, rulerMock);
+
+    Map<String, String> params = new HashMap<>();
+    params.put("type", "alert");
+
+    assertNotNull(delegating.getRules(params));
+    assertNotNull(delegating.getRulesByNamespace("ns", params));
+    assertEquals("ok", delegating.createOrUpdateRuleGroup("ns", "name: g\nrules: []\n"));
+    assertEquals("ok", delegating.deleteRuleNamespace("ns"));
+    assertEquals("ok", delegating.deleteRuleGroup("ns", "g"));
+
+    org.mockito.Mockito.verify(rulerMock).getRules(params);
+    org.mockito.Mockito.verify(rulerMock).getRulesByNamespace("ns", params);
+    ArgumentCaptor<String> yamlCaptor = ArgumentCaptor.forClass(String.class);
+    org.mockito.Mockito.verify(rulerMock)
+        .createOrUpdateRuleGroup(org.mockito.ArgumentMatchers.eq("ns"), yamlCaptor.capture());
+    assertEquals("name: g\nrules: []\n", yamlCaptor.getValue());
+    org.mockito.Mockito.verify(rulerMock).deleteRuleNamespace("ns");
+    org.mockito.Mockito.verify(rulerMock).deleteRuleGroup("ns", "g");
+    // No HTTP should hit the mock server via the delegating client's ruler path.
+    assertEquals(0, mockWebServer.getRequestCount());
   }
 }
