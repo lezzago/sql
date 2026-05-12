@@ -326,4 +326,84 @@ public class PrometheusClientUtilsTest {
       assertTrue(e.getMessage().contains("AUTH Type : unsupported is not supported"));
     }
   }
+
+  @Test
+  public void testCreatePrometheusClientDefaultRulerIsCortex() {
+    Map<String, String> properties = new HashMap<>();
+    properties.put(PrometheusClientUtils.PROMETHEUS_URI, "http://prometheus:9090");
+
+    DataSourceMetadata metadata = mock(DataSourceMetadata.class);
+    when(metadata.getProperties()).thenReturn(properties);
+
+    PrometheusClient client = PrometheusClientUtils.createPrometheusClient(metadata, settings);
+    assertNotNull(client);
+  }
+
+  @Test
+  public void testCreatePrometheusClientWithExplicitCortexRulerType() {
+    Map<String, String> properties = new HashMap<>();
+    properties.put(PrometheusClientUtils.PROMETHEUS_URI, "http://prometheus:9090");
+    properties.put(PrometheusClientUtils.RULER_TYPE, "cortex");
+
+    DataSourceMetadata metadata = mock(DataSourceMetadata.class);
+    when(metadata.getProperties()).thenReturn(properties);
+
+    PrometheusClient client = PrometheusClientUtils.createPrometheusClient(metadata, settings);
+    assertNotNull(client);
+  }
+
+  @Test
+  public void testCreatePrometheusClientWithAmpRulerType() {
+    Map<String, String> properties = new HashMap<>();
+    properties.put(PrometheusClientUtils.PROMETHEUS_URI,
+        "https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-abc");
+    properties.put(PrometheusClientUtils.AUTH_TYPE, "awssigv4");
+    properties.put(PrometheusClientUtils.ACCESS_KEY, "access-key");
+    properties.put(PrometheusClientUtils.SECRET_KEY, "secret-key");
+    properties.put(PrometheusClientUtils.REGION, "us-east-1");
+    properties.put(PrometheusClientUtils.RULER_TYPE, "amp");
+    properties.put(PrometheusClientUtils.RULER_WORKSPACE_ID, "ws-abc");
+    properties.put(PrometheusClientUtils.RULER_ENDPOINT, "https://aps.us-east-1.amazonaws.com");
+
+    DataSourceMetadata metadata = mock(DataSourceMetadata.class);
+    when(metadata.getProperties()).thenReturn(properties);
+
+    PrometheusClient client = PrometheusClientUtils.createPrometheusClient(metadata, settings);
+    assertNotNull(client);
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testCreatePrometheusClientAmpMissingWorkspaceIdFails() {
+    Map<String, String> properties = new HashMap<>();
+    properties.put(PrometheusClientUtils.PROMETHEUS_URI, "https://aps-workspaces.example.com");
+    properties.put(PrometheusClientUtils.RULER_TYPE, "amp");
+    properties.put(PrometheusClientUtils.RULER_ENDPOINT, "https://aps.us-east-1.amazonaws.com");
+
+    DataSourceMetadata metadata = mock(DataSourceMetadata.class);
+    when(metadata.getProperties()).thenReturn(properties);
+    PrometheusClientUtils.createPrometheusClient(metadata, settings);
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testCreatePrometheusClientAmpMissingEndpointFails() {
+    Map<String, String> properties = new HashMap<>();
+    properties.put(PrometheusClientUtils.PROMETHEUS_URI, "https://aps-workspaces.example.com");
+    properties.put(PrometheusClientUtils.RULER_TYPE, "amp");
+    properties.put(PrometheusClientUtils.RULER_WORKSPACE_ID, "ws-abc");
+
+    DataSourceMetadata metadata = mock(DataSourceMetadata.class);
+    when(metadata.getProperties()).thenReturn(properties);
+    PrometheusClientUtils.createPrometheusClient(metadata, settings);
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testCreatePrometheusClientUnknownRulerTypeFails() {
+    Map<String, String> properties = new HashMap<>();
+    properties.put(PrometheusClientUtils.PROMETHEUS_URI, "http://prometheus:9090");
+    properties.put(PrometheusClientUtils.RULER_TYPE, "unknown");
+
+    DataSourceMetadata metadata = mock(DataSourceMetadata.class);
+    when(metadata.getProperties()).thenReturn(properties);
+    PrometheusClientUtils.createPrometheusClient(metadata, settings);
+  }
 }

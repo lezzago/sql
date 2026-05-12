@@ -7,7 +7,6 @@
 
 package org.opensearch.sql.prometheus.storage;
 
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.Map;
@@ -20,7 +19,6 @@ import org.opensearch.sql.datasource.model.DataSourceType;
 import org.opensearch.sql.datasources.auth.AuthenticationType;
 import org.opensearch.sql.datasources.utils.DatasourceValidationUtils;
 import org.opensearch.sql.prometheus.client.PrometheusClient;
-import org.opensearch.sql.prometheus.client.PrometheusClientImpl;
 import org.opensearch.sql.prometheus.utils.PrometheusClientUtils;
 import org.opensearch.sql.storage.DataSourceFactory;
 import org.opensearch.sql.storage.StorageEngine;
@@ -35,6 +33,12 @@ public class PrometheusStorageFactory implements DataSourceFactory {
   public static final String REGION = "prometheus.auth.region";
   public static final String ACCESS_KEY = "prometheus.auth.access_key";
   public static final String SECRET_KEY = "prometheus.auth.secret_key";
+
+  public static final String RULER_TYPE = "prometheus.ruler.type";
+  public static final String RULER_WORKSPACE_ID = "prometheus.ruler.workspace_id";
+  public static final String RULER_ENDPOINT = "prometheus.ruler.endpoint";
+  private static final String RULER_TYPE_CORTEX = "cortex";
+  private static final String RULER_TYPE_AMP = "amp";
 
   private final Settings settings;
 
@@ -53,9 +57,13 @@ public class PrometheusStorageFactory implements DataSourceFactory {
     PrometheusClient prometheusClient;
     try {
       validateDataSourceConfigProperties(requiredConfig);
-      prometheusClient = new PrometheusClientImpl(
-          PrometheusClientUtils.getHttpClient(requiredConfig, settings),
-          new URI(requiredConfig.get(URI)));
+      DataSourceMetadata metadata =
+          new DataSourceMetadata.Builder()
+              .setName("prometheus")
+              .setConnector(DataSourceType.PROMETHEUS)
+              .setProperties(requiredConfig)
+              .build();
+      prometheusClient = PrometheusClientUtils.createPrometheusClient(metadata, settings);
     } catch (URISyntaxException | UnknownHostException e) {
       throw new IllegalArgumentException(
           String.format("Invalid URI in prometheus properties: %s", e.getMessage()));
@@ -82,6 +90,26 @@ public class PrometheusStorageFactory implements DataSourceFactory {
     }
     DatasourceValidationUtils.validateHost(
         dataSourceMetadataConfig.get(URI),
+        settings.getSettingValue(Settings.Key.DATASOURCES_URI_HOSTS_DENY_LIST));
+    validateRulerProperties(dataSourceMetadataConfig);
+  }
+
+  private void validateRulerProperties(Map<String, String> config)
+      throws URISyntaxException, UnknownHostException {
+    String rulerType = config.get(RULER_TYPE);
+    if (rulerType == null || RULER_TYPE_CORTEX.equalsIgnoreCase(rulerType)) {
+      return;
+    }
+    if (!RULER_TYPE_AMP.equalsIgnoreCase(rulerType)) {
+      throw new IllegalArgumentException(
+          String.format(
+              "Unsupported %s value '%s'. Supported values: %s, %s.",
+              RULER_TYPE, rulerType, RULER_TYPE_CORTEX, RULER_TYPE_AMP));
+    }
+    DatasourceValidationUtils.validateLengthAndRequiredFields(
+        config, Set.of(RULER_WORKSPACE_ID, RULER_ENDPOINT));
+    DatasourceValidationUtils.validateHost(
+        config.get(RULER_ENDPOINT),
         settings.getSettingValue(Settings.Key.DATASOURCES_URI_HOSTS_DENY_LIST));
   }
 }
