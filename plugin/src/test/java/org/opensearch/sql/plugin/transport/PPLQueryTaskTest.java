@@ -10,6 +10,8 @@ import static org.junit.Assert.*;
 import java.util.Map;
 import org.junit.Test;
 import org.opensearch.core.tasks.TaskId;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryRequest;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryTask;
 
 public class PPLQueryTaskTest {
 
@@ -28,35 +30,31 @@ public class PPLQueryTaskTest {
 
   @Test
   public void testCreateTaskReturnsPPLQueryTask() {
-    TransportPPLQueryRequest transportPPLQueryRequest =
-        new TransportPPLQueryRequest("source=t a=1", null, "/_plugins/_ppl");
+    PPLQueryRequest pplRequest = new PPLQueryRequest("source=t a=1", null, "/_plugins/_ppl");
     PPLQueryTask task =
-        transportPPLQueryRequest.createTask(
+        pplRequest.createTask(
             1, "transport", "cluster:admin/opensearch/ppl", TaskId.EMPTY_TASK_ID, Map.of());
     assertNotNull(task);
   }
 
   @Test
   public void testWithQueryId() {
-    TransportPPLQueryRequest transportPPLQueryRequest =
-        new TransportPPLQueryRequest("source=t a=1", null, "/_plugins/_ppl");
-    transportPPLQueryRequest.queryId("test-123");
-    assertEquals("PPL [queryId=test-123]: source=t a=1", transportPPLQueryRequest.getDescription());
+    PPLQueryRequest pplRequest = new PPLQueryRequest("source=t a=1", null, "/_plugins/_ppl");
+    pplRequest.queryId("test-123");
+    assertEquals("PPL [queryId=test-123]: source=t a=1", pplRequest.getDescription());
   }
 
   @Test
   public void testWithoutQueryId() {
-    TransportPPLQueryRequest transportPPLQueryRequest =
-        new TransportPPLQueryRequest("source=t a=1", null, "/_plugins/_ppl");
-    assertEquals("PPL: source=t a=1", transportPPLQueryRequest.getDescription());
+    PPLQueryRequest pplRequest = new PPLQueryRequest("source=t a=1", null, "/_plugins/_ppl");
+    assertEquals("PPL: source=t a=1", pplRequest.getDescription());
   }
 
   @Test
   public void testCooperativeModel() {
-    TransportPPLQueryRequest transportPPLQueryRequest =
-        new TransportPPLQueryRequest("source=t a=1", null, "/_plugins/_ppl");
+    PPLQueryRequest pplRequest = new PPLQueryRequest("source=t a=1", null, "/_plugins/_ppl");
     PPLQueryTask task =
-        transportPPLQueryRequest.createTask(
+        pplRequest.createTask(
             1, "transport", "cluster:admin/opensearch/ppl", TaskId.EMPTY_TASK_ID, Map.of());
     assertFalse(task.isCancelled());
     task.cancel("Test");

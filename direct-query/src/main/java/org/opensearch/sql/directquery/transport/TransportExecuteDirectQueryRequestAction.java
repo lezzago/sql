@@ -5,17 +5,16 @@
 
 package org.opensearch.sql.directquery.transport;
 
-import org.opensearch.action.ActionType;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.sql.commons.transport.directquery.ExecuteDirectQueryAction;
+import org.opensearch.sql.commons.transport.directquery.ExecuteDirectQueryRequest;
+import org.opensearch.sql.commons.transport.directquery.ExecuteDirectQueryResponse;
 import org.opensearch.sql.directquery.DirectQueryExecutorService;
 import org.opensearch.sql.directquery.DirectQueryExecutorServiceImpl;
-import org.opensearch.sql.directquery.rest.model.ExecuteDirectQueryRequest;
-import org.opensearch.sql.directquery.rest.model.ExecuteDirectQueryResponse;
-import org.opensearch.sql.directquery.transport.model.ExecuteDirectQueryActionRequest;
-import org.opensearch.sql.directquery.transport.model.ExecuteDirectQueryActionResponse;
+import org.opensearch.sql.directquery.transport.format.DirectQueryCommonsConverter;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -23,43 +22,41 @@ import org.opensearch.transport.TransportService;
  * @opensearch.experimental
  */
 public class TransportExecuteDirectQueryRequestAction
-    extends HandledTransportAction<
-        ExecuteDirectQueryActionRequest, ExecuteDirectQueryActionResponse> {
+    extends HandledTransportAction<ExecuteDirectQueryRequest, ExecuteDirectQueryResponse> {
 
   private final DirectQueryExecutorService directQueryExecutorService;
 
-  public static final String NAME = "cluster:admin/opensearch/direct_query/read/query";
-  public static final ActionType<ExecuteDirectQueryActionResponse> ACTION_TYPE =
-      new ActionType<>(NAME, ExecuteDirectQueryActionResponse::new);
+  public static final String NAME = ExecuteDirectQueryAction.NAME;
+  public static final ExecuteDirectQueryAction ACTION_TYPE = ExecuteDirectQueryAction.INSTANCE;
 
   @Inject
   public TransportExecuteDirectQueryRequestAction(
       TransportService transportService,
       ActionFilters actionFilters,
       DirectQueryExecutorServiceImpl directQueryExecutorService) {
-    super(NAME, transportService, actionFilters, ExecuteDirectQueryActionRequest::new);
+    super(NAME, transportService, actionFilters, ExecuteDirectQueryRequest::new);
     this.directQueryExecutorService = directQueryExecutorService;
   }
 
   @Override
   protected void doExecute(
       Task task,
-      ExecuteDirectQueryActionRequest request,
-      ActionListener<ExecuteDirectQueryActionResponse> listener) {
+      ExecuteDirectQueryRequest request,
+      ActionListener<ExecuteDirectQueryResponse> listener) {
     try {
-      ExecuteDirectQueryRequest directQueryRequest = request.getDirectQueryRequest();
+      org.opensearch.sql.directquery.rest.model.ExecuteDirectQueryRequest legacyRequest =
+          DirectQueryCommonsConverter.toLegacy(request);
 
-      ExecuteDirectQueryResponse response =
-          directQueryExecutorService.executeDirectQuery(directQueryRequest);
+      org.opensearch.sql.directquery.rest.model.ExecuteDirectQueryResponse legacyResponse =
+          directQueryExecutorService.executeDirectQuery(legacyRequest);
 
-      // Pass the data source name from the request to the response constructor
       listener.onResponse(
-          new ExecuteDirectQueryActionResponse(
-              response.getQueryId(),
-              response.getResult(),
-              response.getSessionId(),
-              directQueryRequest.getDataSources(),
-              response.getDataSourceType()));
+          DirectQueryCommonsConverter.toCommonsResponse(
+              legacyResponse.getQueryId(),
+              legacyResponse.getResult(),
+              legacyResponse.getSessionId(),
+              legacyRequest.getDataSources(),
+              legacyResponse.getDataSourceType()));
     } catch (Exception e) {
       listener.onFailure(e);
     }

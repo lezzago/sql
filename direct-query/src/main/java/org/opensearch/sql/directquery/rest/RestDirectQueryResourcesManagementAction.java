@@ -29,15 +29,13 @@ import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.datasource.client.exceptions.DataSourceClientException;
 import org.opensearch.sql.datasources.exceptions.ErrorMessage;
 import org.opensearch.sql.datasources.utils.Scheduler;
-import org.opensearch.sql.directquery.rest.model.GetDirectQueryResourcesRequest;
-import org.opensearch.sql.directquery.rest.model.WriteDirectQueryResourcesRequest;
+import org.opensearch.sql.commons.transport.directquery.GetDirectQueryResourcesRequest;
+import org.opensearch.sql.commons.transport.directquery.GetDirectQueryResourcesResponse;
+import org.opensearch.sql.commons.transport.directquery.WriteDirectQueryResourcesRequest;
+import org.opensearch.sql.commons.transport.directquery.WriteDirectQueryResourcesResponse;
 import org.opensearch.sql.directquery.transport.TransportGetDirectQueryResourcesRequestAction;
 import org.opensearch.sql.directquery.transport.TransportWriteDirectQueryResourcesRequestAction;
 import org.opensearch.sql.directquery.transport.format.DirectQueryResourcesRequestConverter;
-import org.opensearch.sql.directquery.transport.model.ReadDirectQueryResourcesActionRequest;
-import org.opensearch.sql.directquery.transport.model.ReadDirectQueryResourcesActionResponse;
-import org.opensearch.sql.directquery.transport.model.WriteDirectQueryResourcesActionRequest;
-import org.opensearch.sql.directquery.transport.model.WriteDirectQueryResourcesActionResponse;
 import org.opensearch.sql.opensearch.setting.OpenSearchSettings;
 import org.opensearch.sql.opensearch.util.RestRequestUtil;
 import org.opensearch.transport.client.node.NodeClient;
@@ -146,8 +144,9 @@ public class RestDirectQueryResourcesManagementAction extends BaseRestHandler {
 
   private RestChannelConsumer executeGetResourcesRequest(
       RestRequest restRequest, NodeClient nodeClient) {
-    GetDirectQueryResourcesRequest directQueryRequest =
+    org.opensearch.sql.directquery.rest.model.GetDirectQueryResourcesRequest legacyRequest =
         DirectQueryResourcesRequestConverter.toGetDirectRestRequest(restRequest);
+    GetDirectQueryResourcesRequest commonsRequest = toCommons(legacyRequest);
 
     return restChannel ->
         Scheduler.schedule(
@@ -155,10 +154,10 @@ public class RestDirectQueryResourcesManagementAction extends BaseRestHandler {
             () ->
                 nodeClient.execute(
                     TransportGetDirectQueryResourcesRequestAction.ACTION_TYPE,
-                    new ReadDirectQueryResourcesActionRequest(directQueryRequest),
+                    commonsRequest,
                     new ActionListener<>() {
                       @Override
-                      public void onResponse(ReadDirectQueryResourcesActionResponse response) {
+                      public void onResponse(GetDirectQueryResourcesResponse response) {
                         restChannel.sendResponse(
                             new BytesRestResponse(
                                 RestStatus.OK,
@@ -175,8 +174,9 @@ public class RestDirectQueryResourcesManagementAction extends BaseRestHandler {
 
   private RestChannelConsumer executeWriteResourcesRequest(
       RestRequest restRequest, NodeClient nodeClient) {
-    WriteDirectQueryResourcesRequest directQueryRequest =
+    org.opensearch.sql.directquery.rest.model.WriteDirectQueryResourcesRequest legacyRequest =
         DirectQueryResourcesRequestConverter.toWriteDirectRestRequest(restRequest);
+    WriteDirectQueryResourcesRequest commonsRequest = toCommons(legacyRequest);
 
     return restChannel ->
         Scheduler.schedule(
@@ -184,10 +184,10 @@ public class RestDirectQueryResourcesManagementAction extends BaseRestHandler {
             () ->
                 nodeClient.execute(
                     TransportWriteDirectQueryResourcesRequestAction.ACTION_TYPE,
-                    new WriteDirectQueryResourcesActionRequest(directQueryRequest),
+                    commonsRequest,
                     new ActionListener<>() {
                       @Override
-                      public void onResponse(WriteDirectQueryResourcesActionResponse response) {
+                      public void onResponse(WriteDirectQueryResourcesResponse response) {
                         restChannel.sendResponse(
                             new BytesRestResponse(
                                 RestStatus.OK,
@@ -200,6 +200,37 @@ public class RestDirectQueryResourcesManagementAction extends BaseRestHandler {
                         handleException(e, restChannel, restRequest.method());
                       }
                     }));
+  }
+
+  private static GetDirectQueryResourcesRequest toCommons(
+      org.opensearch.sql.directquery.rest.model.GetDirectQueryResourcesRequest legacy) {
+    GetDirectQueryResourcesRequest commons = new GetDirectQueryResourcesRequest();
+    commons.setDataSource(legacy.getDataSource());
+    if (legacy.getResourceType() != null) {
+      commons.setResourceType(
+          org.opensearch.sql.commons.transport.directquery.DirectQueryResourceType.valueOf(
+              legacy.getResourceType().name()));
+    }
+    commons.setResourceName(legacy.getResourceName());
+    commons.setQueryParams(legacy.getQueryParams());
+    return commons;
+  }
+
+  private static WriteDirectQueryResourcesRequest toCommons(
+      org.opensearch.sql.directquery.rest.model.WriteDirectQueryResourcesRequest legacy) {
+    WriteDirectQueryResourcesRequest commons = new WriteDirectQueryResourcesRequest();
+    commons.setDataSource(legacy.getDataSource());
+    if (legacy.getResourceType() != null) {
+      commons.setResourceType(
+          org.opensearch.sql.commons.transport.directquery.DirectQueryResourceType.valueOf(
+              legacy.getResourceType().name()));
+    }
+    commons.setResourceName(legacy.getResourceName());
+    commons.setRequest(legacy.getRequest());
+    commons.setRequestOptions(legacy.getRequestOptions());
+    commons.setGroupName(legacy.getGroupName());
+    commons.setDelete(legacy.isDelete());
+    return commons;
   }
 
   private void handleException(

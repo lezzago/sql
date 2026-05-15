@@ -14,7 +14,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Supplier;
 import org.apache.calcite.rel.RelNode;
-import org.opensearch.action.ActionRequest;
+import org.json.JSONObject;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.analytics.exec.QueryPlanExecutor;
@@ -27,6 +27,10 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.sql.common.response.ResponseListener;
 import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.common.utils.QueryContext;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryAction;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryRequest;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryResponse;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryTask;
 import org.opensearch.sql.datasource.DataSourceService;
 import org.opensearch.sql.datasources.service.DataSourceServiceImpl;
 import org.opensearch.sql.executor.ExecutionEngine;
@@ -41,7 +45,6 @@ import org.opensearch.sql.plugin.config.OpenSearchPluginModule;
 import org.opensearch.sql.plugin.rest.AnalyticsExecutorHolder;
 import org.opensearch.sql.plugin.rest.RestUnifiedQueryAction;
 import org.opensearch.sql.ppl.PPLService;
-import org.opensearch.sql.ppl.domain.PPLQueryRequest;
 import org.opensearch.sql.protocol.response.QueryResult;
 import org.opensearch.sql.protocol.response.format.CsvResponseFormatter;
 import org.opensearch.sql.protocol.response.format.Format;
@@ -57,7 +60,7 @@ import org.opensearch.transport.client.node.NodeClient;
 
 /** Send PPL query transport action. */
 public class TransportPPLQueryAction
-    extends HandledTransportAction<ActionRequest, TransportPPLQueryResponse> {
+    extends HandledTransportAction<PPLQueryRequest, PPLQueryResponse> {
 
   private final Injector injector;
 
@@ -79,7 +82,7 @@ public class TransportPPLQueryAction
       DataSourceServiceImpl dataSourceService,
       org.opensearch.common.settings.Settings clusterSettings,
       EngineExtensionsHolder extensionsHolder) {
-    super(PPLQueryAction.NAME, transportService, actionFilters, TransportPPLQueryRequest::new);
+    super(PPLQueryAction.NAME, transportService, actionFilters, PPLQueryRequest::new);
     this.clientRef = client;
     this.clusterServiceRef = clusterService;
 
@@ -115,12 +118,33 @@ public class TransportPPLQueryAction
   }
 
   /**
-   * {@inheritDoc} Transform the request and call super.doExecute() to support call from other
-   * plugins.
+   * Map a commons wire request onto the legacy {@link
+   * org.opensearch.sql.ppl.domain.PPLQueryRequest}.
    */
+  private static org.opensearch.sql.ppl.domain.PPLQueryRequest toLegacyRequest(
+      PPLQueryRequest commonsRequest) {
+    JSONObject jsonContent =
+        commonsRequest.getJsonContentRaw() == null
+            ? null
+            : new JSONObject(commonsRequest.getJsonContentRaw());
+    org.opensearch.sql.ppl.domain.PPLQueryRequest legacy =
+        new org.opensearch.sql.ppl.domain.PPLQueryRequest(
+            commonsRequest.getRequest(),
+            jsonContent,
+            commonsRequest.getPath(),
+            commonsRequest.getFormat(),
+            commonsRequest.getExplainMode(),
+            commonsRequest.profile());
+    legacy.sanitize(commonsRequest.sanitize());
+    legacy.style(JsonResponseFormatter.Style.valueOf(commonsRequest.style().name()));
+    legacy.queryId(commonsRequest.queryId());
+    return legacy;
+  }
+
+  /** {@inheritDoc} */
   @Override
   protected void doExecute(
-      Task task, ActionRequest request, ActionListener<TransportPPLQueryResponse> listener) {
+      Task task, PPLQueryRequest request, ActionListener<PPLQueryResponse> listener) {
     if (!pplEnabled.get()) {
       listener.onFailure(
           new IllegalAccessException(
@@ -129,11 +153,10 @@ public class TransportPPLQueryAction
       return;
     }
 
-    TransportPPLQueryRequest transportRequest = TransportPPLQueryRequest.fromActionRequest(request);
-    if (transportRequest.isGrammarRequest()) {
+    if (request.isGrammarRequest()) {
       // Authorization is enforced by this transport action before returning grammar metadata in
       // REST.
-      listener.onResponse(new TransportPPLQueryResponse("{}"));
+      listener.onResponse(new PPLQueryResponse("{}"));
       return;
     }
 
@@ -145,10 +168,9 @@ public class TransportPPLQueryAction
 
     QueryContext.addRequestId();
 
-    // in order to use PPL service, we need to convert TransportPPLQueryRequest to PPLQueryRequest
-    PPLQueryRequest transformedRequest = transportRequest.toPPLQueryRequest();
+    org.opensearch.sql.ppl.domain.PPLQueryRequest transformedRequest = toLegacyRequest(request);
     QueryContext.setProfile(transformedRequest.profile());
-    ActionListener<TransportPPLQueryResponse> clearingListener = wrapWithProfilingClear(listener);
+    ActionListener<PPLQueryResponse> clearingListener = wrapWithProfilingClear(listener);
 
     // Route to analytics engine for non-Lucene (e.g., Parquet-backed) indices.
     if (unifiedQueryHandler != null
@@ -182,13 +204,9 @@ public class TransportPPLQueryAction
     }
   }
 
-  /**
-   * TODO: need to extract an interface for both SQL and PPL action handler and move these common
-   * methods to the interface. This is not easy to do now because SQL action handler is still in
-   * legacy module.
-   */
   private ResponseListener<ExecutionEngine.ExplainResponse> createExplainResponseListener(
-      PPLQueryRequest request, ActionListener<TransportPPLQueryResponse> listener) {
+      org.opensearch.sql.ppl.domain.PPLQueryRequest request,
+      ActionListener<PPLQueryResponse> listener) {
     return new ResponseListener<ExecutionEngine.ExplainResponse>() {
       @Override
       public void onResponse(ExecutionEngine.ExplainResponse response) {
@@ -213,7 +231,7 @@ public class TransportPPLQueryAction
               };
         }
         listener.onResponse(
-            new TransportPPLQueryResponse(formatter.format(response), formatter.contentType()));
+            new PPLQueryResponse(formatter.format(response), formatter.contentType()));
       }
 
       @Override
@@ -224,7 +242,8 @@ public class TransportPPLQueryAction
   }
 
   private ResponseListener<ExecutionEngine.QueryResponse> createListener(
-      PPLQueryRequest pplRequest, ActionListener<TransportPPLQueryResponse> listener) {
+      org.opensearch.sql.ppl.domain.PPLQueryRequest pplRequest,
+      ActionListener<PPLQueryResponse> listener) {
     Format format = format(pplRequest);
     ResponseFormatter<QueryResult> formatter;
     if (format.equals(Format.CSV)) {
@@ -244,7 +263,7 @@ public class TransportPPLQueryAction
             formatter.format(
                 new QueryResult(
                     response.getSchema(), response.getResults(), response.getCursor(), PPL_SPEC));
-        listener.onResponse(new TransportPPLQueryResponse(responseContent));
+        listener.onResponse(new PPLQueryResponse(responseContent));
       }
 
       @Override
@@ -254,7 +273,7 @@ public class TransportPPLQueryAction
     };
   }
 
-  private Format format(PPLQueryRequest pplRequest) {
+  private Format format(org.opensearch.sql.ppl.domain.PPLQueryRequest pplRequest) {
     String format = pplRequest.getFormat();
     Optional<Format> optionalFormat = Format.of(format);
     if (optionalFormat.isPresent()) {
@@ -265,13 +284,13 @@ public class TransportPPLQueryAction
     }
   }
 
-  private ActionListener<TransportPPLQueryResponse> wrapWithProfilingClear(
-      ActionListener<TransportPPLQueryResponse> delegate) {
+  private ActionListener<PPLQueryResponse> wrapWithProfilingClear(
+      ActionListener<PPLQueryResponse> delegate) {
     return new ActionListener<>() {
       @Override
-      public void onResponse(TransportPPLQueryResponse transportPPLQueryResponse) {
+      public void onResponse(PPLQueryResponse pplQueryResponse) {
         try {
-          delegate.onResponse(transportPPLQueryResponse);
+          delegate.onResponse(pplQueryResponse);
         } finally {
           QueryProfiling.clear();
         }

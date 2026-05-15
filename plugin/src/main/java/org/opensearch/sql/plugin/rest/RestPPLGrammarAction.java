@@ -20,9 +20,9 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
-import org.opensearch.sql.plugin.transport.PPLQueryAction;
-import org.opensearch.sql.plugin.transport.TransportPPLQueryRequest;
-import org.opensearch.sql.plugin.transport.TransportPPLQueryResponse;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryAction;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryRequest;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryResponse;
 import org.opensearch.sql.ppl.autocomplete.GrammarBundle;
 import org.opensearch.sql.ppl.autocomplete.PPLGrammarBundleBuilder;
 import org.opensearch.transport.client.node.NodeClient;
@@ -58,7 +58,7 @@ public class RestPPLGrammarAction extends BaseRestHandler {
             client,
             new ActionListener<>() {
               @Override
-              public void onResponse(TransportPPLQueryResponse ignored) {
+              public void onResponse(PPLQueryResponse ignored) {
                 try {
                   GrammarBundle bundle = getBundle();
                   XContentBuilder builder = channel.newBuilder();
@@ -84,10 +84,8 @@ public class RestPPLGrammarAction extends BaseRestHandler {
   }
 
   @VisibleForTesting
-  protected void authorizeRequest(
-      NodeClient client, ActionListener<TransportPPLQueryResponse> listener) {
-    client.execute(
-        PPLQueryAction.INSTANCE, new TransportPPLQueryRequest("", null, ENDPOINT_PATH), listener);
+  protected void authorizeRequest(NodeClient client, ActionListener<PPLQueryResponse> listener) {
+    client.execute(PPLQueryAction.INSTANCE, new PPLQueryRequest("", null, ENDPOINT_PATH), listener);
   }
 
   private void sendErrorResponse(RestChannel channel, Exception e) {

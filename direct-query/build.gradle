@@ -16,6 +16,7 @@ repositories {
 dependencies {
     api project(':core')
     api project(':direct-query-core')
+    api project(':opensearch-sql-commons')
     implementation project(':protocol')
     implementation project(':opensearch')
     implementation project(':datasources')
@@ -85,7 +86,7 @@ jacocoTestCoverageVerification {
         rule {
             element = 'CLASS'
             excludes = [
-                'org.opensearch.sql.directquery.transport.model.*'
+                'org.opensearch.sql.directquery.transport.model.datasource.*'
             ]
             limit {
                 counter = 'LINE'

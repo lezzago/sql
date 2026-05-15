@@ -15,12 +15,10 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.sql.directquery.DirectQueryExecutorService;
+import org.opensearch.sql.commons.transport.directquery.ExecuteDirectQueryRequest;
+import org.opensearch.sql.commons.transport.directquery.ExecuteDirectQueryResponse;
 import org.opensearch.sql.directquery.DirectQueryExecutorServiceImpl;
-import org.opensearch.sql.directquery.rest.model.ExecuteDirectQueryRequest;
-import org.opensearch.sql.directquery.rest.model.ExecuteDirectQueryResponse;
-import org.opensearch.sql.directquery.transport.model.ExecuteDirectQueryActionRequest;
-import org.opensearch.sql.directquery.transport.model.ExecuteDirectQueryActionResponse;
+import org.opensearch.sql.spark.rest.model.LangType;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -32,11 +30,8 @@ public class TransportExecuteDirectQueryRequestActionTest {
   @Mock private TransportService transportService;
   @Mock private ActionFilters actionFilters;
   @Mock private DirectQueryExecutorServiceImpl mockExecutorService;
-  @Mock private DirectQueryExecutorService executorService;
   @Mock private Task task;
-  @Mock private ExecuteDirectQueryActionRequest actionRequest;
-  @Mock private ExecuteDirectQueryRequest directQueryRequest;
-  @Mock private ActionListener<ExecuteDirectQueryActionResponse> actionListener;
+  @Mock private ActionListener<ExecuteDirectQueryResponse> actionListener;
 
   private TransportExecuteDirectQueryRequestAction transportAction;
 
@@ -47,42 +42,44 @@ public class TransportExecuteDirectQueryRequestActionTest {
     transportAction =
         new TransportExecuteDirectQueryRequestAction(
             transportService, actionFilters, mockExecutorService);
-
-    when(actionRequest.getDirectQueryRequest()).thenReturn(directQueryRequest);
   }
 
   @Test
   public void testDoExecuteSuccess() {
-    // Prepare mock response with valid data
-    ExecuteDirectQueryResponse mockResponse = new ExecuteDirectQueryResponse();
+    ExecuteDirectQueryRequest commonsRequest = new ExecuteDirectQueryRequest();
+    commonsRequest.setDataSources("prom-ds");
+    commonsRequest.setQuery("up");
+    commonsRequest.setLanguage(LangType.PROMQL.getText());
+
+    org.opensearch.sql.directquery.rest.model.ExecuteDirectQueryResponse mockResponse =
+        new org.opensearch.sql.directquery.rest.model.ExecuteDirectQueryResponse();
     mockResponse.setQueryId("test-query-id");
     mockResponse.setSessionId("test-session-id");
-    mockResponse.setResult(
-        "{\"data\":{\"resultType\":\"vector\",\"result\":[]}}"); // Valid Prometheus JSON
+    mockResponse.setResult("{\"data\":{\"resultType\":\"vector\",\"result\":[]}}");
     mockResponse.setDataSourceType("prometheus");
 
-    when(mockExecutorService.executeDirectQuery(any(ExecuteDirectQueryRequest.class)))
+    when(mockExecutorService.executeDirectQuery(
+            any(org.opensearch.sql.directquery.rest.model.ExecuteDirectQueryRequest.class)))
         .thenReturn(mockResponse);
 
-    // Execute the action
-    transportAction.doExecute(task, actionRequest, actionListener);
+    transportAction.doExecute(task, commonsRequest, actionListener);
 
-    // Verify correct execution
-    verify(mockExecutorService).executeDirectQuery(directQueryRequest);
-    verify(actionListener).onResponse(any(ExecuteDirectQueryActionResponse.class));
+    verify(actionListener).onResponse(any(ExecuteDirectQueryResponse.class));
   }
 
   @Test
   public void testDoExecuteFailure() {
-    // Setup to throw exception
+    ExecuteDirectQueryRequest commonsRequest = new ExecuteDirectQueryRequest();
+    commonsRequest.setDataSources("prom-ds");
+    commonsRequest.setLanguage(LangType.PROMQL.getText());
+
     RuntimeException exception = new RuntimeException("Test exception");
-    when(mockExecutorService.executeDirectQuery(any(ExecuteDirectQueryRequest.class)))
+    when(mockExecutorService.executeDirectQuery(
+            any(org.opensearch.sql.directquery.rest.model.ExecuteDirectQueryRequest.class)))
         .thenThrow(exception);
 
-    // Execute the action
-    transportAction.doExecute(task, actionRequest, actionListener);
+    transportAction.doExecute(task, commonsRequest, actionListener);
 
-    // Verify exception was passed to listener
     verify(actionListener).onFailure(exception);
   }
 }

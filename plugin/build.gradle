@@ -167,6 +167,7 @@ dependencies {
     api project(':datasources')
     api project(':async-query')
     api project(':direct-query')
+    api project(':opensearch-sql-commons')
 
     testImplementation group: 'net.bytebuddy', name: 'byte-buddy-agent', version: '1.15.11'
     testImplementation group: 'org.hamcrest', name: 'hamcrest-library', version: "${hamcrest_version}"
@@ -316,6 +317,9 @@ testClusters.integTest {
 
     // add customized keystore
     keystore 'plugins.query.federation.datasources.config', new File("$projectDir/src/test/resources/", 'datasources.json')
+
+    // Local-run-only: datasource master key for ./gradlew :opensearch-sql-plugin:run manual testing.
+    setting 'plugins.query.datasources.encryption.masterkey', '1234567890123456'
 }
 
 run {

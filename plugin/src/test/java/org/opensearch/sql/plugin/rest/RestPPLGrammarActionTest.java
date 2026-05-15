@@ -25,7 +25,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestResponse;
-import org.opensearch.sql.plugin.transport.TransportPPLQueryResponse;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryResponse;
 import org.opensearch.sql.ppl.autocomplete.GrammarBundle;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.transport.client.node.NodeClient;
@@ -42,8 +42,8 @@ public class RestPPLGrammarActionTest {
         new RestPPLGrammarAction() {
           @Override
           protected void authorizeRequest(
-              NodeClient client, ActionListener<TransportPPLQueryResponse> listener) {
-            listener.onResponse(new TransportPPLQueryResponse("{}"));
+              NodeClient client, ActionListener<PPLQueryResponse> listener) {
+            listener.onResponse(new PPLQueryResponse("{}"));
           }
         };
     client = mock(NodeClient.class);
@@ -112,8 +112,8 @@ public class RestPPLGrammarActionTest {
         new RestPPLGrammarAction() {
           @Override
           protected void authorizeRequest(
-              NodeClient client, ActionListener<TransportPPLQueryResponse> listener) {
-            listener.onResponse(new TransportPPLQueryResponse("{}"));
+              NodeClient client, ActionListener<PPLQueryResponse> listener) {
+            listener.onResponse(new PPLQueryResponse("{}"));
           }
 
           @Override
@@ -140,8 +140,8 @@ public class RestPPLGrammarActionTest {
         new RestPPLGrammarAction() {
           @Override
           protected void authorizeRequest(
-              NodeClient client, ActionListener<TransportPPLQueryResponse> listener) {
-            listener.onResponse(new TransportPPLQueryResponse("{}"));
+              NodeClient client, ActionListener<PPLQueryResponse> listener) {
+            listener.onResponse(new PPLQueryResponse("{}"));
           }
 
           @Override
@@ -163,8 +163,8 @@ public class RestPPLGrammarActionTest {
         new RestPPLGrammarAction() {
           @Override
           protected void authorizeRequest(
-              NodeClient client, ActionListener<TransportPPLQueryResponse> listener) {
-            listener.onResponse(new TransportPPLQueryResponse("{}"));
+              NodeClient client, ActionListener<PPLQueryResponse> listener) {
+            listener.onResponse(new PPLQueryResponse("{}"));
           }
 
           @Override
@@ -186,7 +186,7 @@ public class RestPPLGrammarActionTest {
         new RestPPLGrammarAction() {
           @Override
           protected void authorizeRequest(
-              NodeClient client, ActionListener<TransportPPLQueryResponse> listener) {
+              NodeClient client, ActionListener<PPLQueryResponse> listener) {
             listener.onFailure(new OpenSearchStatusException("forbidden", RestStatus.FORBIDDEN));
           }
         };

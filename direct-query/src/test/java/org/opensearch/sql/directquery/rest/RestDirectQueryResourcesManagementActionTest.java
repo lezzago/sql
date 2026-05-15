@@ -30,11 +30,11 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestResponse;
 import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.datasource.client.exceptions.DataSourceClientException;
-import org.opensearch.sql.directquery.rest.model.DirectQueryResourceType;
-import org.opensearch.sql.directquery.transport.model.ReadDirectQueryResourcesActionRequest;
-import org.opensearch.sql.directquery.transport.model.ReadDirectQueryResourcesActionResponse;
-import org.opensearch.sql.directquery.transport.model.WriteDirectQueryResourcesActionRequest;
-import org.opensearch.sql.directquery.transport.model.WriteDirectQueryResourcesActionResponse;
+import org.opensearch.sql.commons.transport.directquery.DirectQueryResourceType;
+import org.opensearch.sql.commons.transport.directquery.GetDirectQueryResourcesRequest;
+import org.opensearch.sql.commons.transport.directquery.GetDirectQueryResourcesResponse;
+import org.opensearch.sql.commons.transport.directquery.WriteDirectQueryResourcesRequest;
+import org.opensearch.sql.commons.transport.directquery.WriteDirectQueryResourcesResponse;
 import org.opensearch.sql.opensearch.setting.OpenSearchSettings;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.node.NodeClient;
@@ -247,8 +247,7 @@ public class RestDirectQueryResourcesManagementActionTest {
   public void testSuccessfulResponse() {
     setDataSourcesEnabled(true);
     String successResponse = "{\"result\":\"success\"}";
-    ReadDirectQueryResourcesActionResponse response =
-        new ReadDirectQueryResourcesActionResponse(successResponse);
+    GetDirectQueryResourcesResponse response = new GetDirectQueryResourcesResponse(successResponse);
 
     Mockito.when(request.method()).thenReturn(RestRequest.Method.GET);
     Map<String, String> requestParams =
@@ -288,19 +287,15 @@ public class RestDirectQueryResourcesManagementActionTest {
 
     Mockito.doAnswer(
             invocation -> {
-              ReadDirectQueryResourcesActionRequest request = invocation.getArgument(1);
-              Assertions.assertEquals(
-                  "testDataSource", request.getDirectQueryRequest().getDataSource());
-              Assertions.assertEquals(
-                  DirectQueryResourceType.LABELS,
-                  request.getDirectQueryRequest().getResourceType());
-              Assertions.assertEquals(
-                  "testResourceName", request.getDirectQueryRequest().getResourceName());
+              GetDirectQueryResourcesRequest request = invocation.getArgument(1);
+              Assertions.assertEquals("testDataSource", request.getDataSource());
+              Assertions.assertEquals(DirectQueryResourceType.LABELS, request.getResourceType());
+              Assertions.assertEquals("testResourceName", request.getResourceName());
               Assertions.assertEquals(
                   Map.of(
                       "mockParamKey1", "mockParamVal1",
                       "mockParamKey2", "mockParamVal2"),
-                  request.getDirectQueryRequest().getQueryParams());
+                  request.getQueryParams());
               return null;
             })
         .when(nodeClient)
@@ -506,8 +501,7 @@ public class RestDirectQueryResourcesManagementActionTest {
   public void testSuccessfulWriteResourceResponse() {
     setDataSourcesEnabled(true);
     String successResponse = "{\"result\":\"silence created\"}";
-    WriteDirectQueryResourcesActionResponse response =
-        new WriteDirectQueryResourcesActionResponse(successResponse);
+    WriteDirectQueryResourcesResponse response = new WriteDirectQueryResourcesResponse(successResponse);
     String requestBody = "{\"matchers\":[{\"name\":\"alertname\",\"value\":\"TestAlert\"}],\"comment\":\"Test silence\"}";
 
     Mockito.when(request.method()).thenReturn(RestRequest.Method.POST);
@@ -537,14 +531,11 @@ public class RestDirectQueryResourcesManagementActionTest {
 
     Mockito.doAnswer(
             invocation -> {
-              WriteDirectQueryResourcesActionRequest request = invocation.getArgument(1);
+              WriteDirectQueryResourcesRequest request = invocation.getArgument(1);
+              Assertions.assertEquals("testDataSource", request.getDataSource());
               Assertions.assertEquals(
-                  "testDataSource", request.getDirectQueryRequest().getDataSource());
-              Assertions.assertEquals(
-                  DirectQueryResourceType.ALERTMANAGER_SILENCES,
-                  request.getDirectQueryRequest().getResourceType());
-              Assertions.assertEquals(
-                  requestBody, request.getDirectQueryRequest().getRequest());
+                  DirectQueryResourceType.ALERTMANAGER_SILENCES, request.getResourceType());
+              Assertions.assertEquals(requestBody, request.getRequest());
               return null;
             })
         .when(nodeClient)
@@ -680,8 +671,7 @@ public class RestDirectQueryResourcesManagementActionTest {
   public void testSuccessfulDeleteResourceResponse() {
     setDataSourcesEnabled(true);
     String successResponse = "{\"status\":\"success\"}";
-    WriteDirectQueryResourcesActionResponse response =
-        new WriteDirectQueryResourcesActionResponse(successResponse);
+    WriteDirectQueryResourcesResponse response = new WriteDirectQueryResourcesResponse(successResponse);
 
     Mockito.when(request.method()).thenReturn(RestRequest.Method.DELETE);
     Mockito.when(request.path())

@@ -16,6 +16,7 @@ repositories {
 
 dependencies {
     api project(':core')
+    api project(':opensearch-sql-commons')
     implementation project(':datasources')
     implementation project(':async-query-core')
     

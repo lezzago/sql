@@ -24,15 +24,16 @@ import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.sql.common.antlr.SyntaxCheckException;
 import org.opensearch.sql.common.error.ErrorReport;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryAction;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryRequest;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryResponse;
+import org.opensearch.sql.commons.transport.ppl.Style;
 import org.opensearch.sql.datasources.exceptions.DataSourceClientException;
 import org.opensearch.sql.exception.QueryEngineException;
 import org.opensearch.sql.legacy.metrics.MetricName;
 import org.opensearch.sql.legacy.metrics.Metrics;
 import org.opensearch.sql.opensearch.response.error.ErrorMessageFactory;
 import org.opensearch.sql.plugin.request.PPLQueryRequestFactory;
-import org.opensearch.sql.plugin.transport.PPLQueryAction;
-import org.opensearch.sql.plugin.transport.TransportPPLQueryRequest;
-import org.opensearch.sql.plugin.transport.TransportPPLQueryResponse;
 import org.opensearch.transport.client.node.NodeClient;
 
 public class RestPPLQueryAction extends BaseRestHandler {
@@ -65,9 +66,6 @@ public class RestPPLQueryAction extends BaseRestHandler {
     if (ex instanceof OpenSearchException) {
       return ((OpenSearchException) ex).status().getStatus();
     }
-    // Possible future work: We currently do this on exception types, when we have more robust
-    // ErrorCodes in more locations it may be worth switching this to be based on those instead.
-    // That lets us identify specific error cases at a granularity higher than exception types.
     if (isClientError(ex)) {
       return 400;
     }
@@ -77,8 +75,6 @@ public class RestPPLQueryAction extends BaseRestHandler {
   private static RestStatus loggedErrorCode(Exception ex) {
     int code = getRawErrorCode(ex);
 
-    // If we hit neither branch, no-op as false alarm error? I don't believe we can ever hit this
-    // scenario.
     if (400 <= code && code < 500) {
       Metrics.getInstance().getNumericalMetric(MetricName.PPL_FAILED_REQ_COUNT_CUS).increment();
     } else if (500 <= code && code < 600) {
@@ -110,23 +106,24 @@ public class RestPPLQueryAction extends BaseRestHandler {
 
   @Override
   protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient nodeClient) {
-    TransportPPLQueryRequest transportPPLQueryRequest =
-        new TransportPPLQueryRequest(PPLQueryRequestFactory.getPPLRequest(request));
+    org.opensearch.sql.ppl.domain.PPLQueryRequest legacyRequest =
+        PPLQueryRequestFactory.getPPLRequest(request);
+    PPLQueryRequest pplQueryRequest = toCommonsRequest(legacyRequest);
 
     return channel ->
         nodeClient.execute(
             PPLQueryAction.INSTANCE,
-            transportPPLQueryRequest,
+            pplQueryRequest,
             new ActionListener<>() {
               @Override
-              public void onResponse(TransportPPLQueryResponse response) {
+              public void onResponse(PPLQueryResponse response) {
                 sendResponse(channel, OK, response.getContentType(), response.getResult());
               }
 
               @Override
               public void onFailure(Exception e) {
                 RestStatus status = loggedErrorCode(e);
-                if (transportPPLQueryRequest.isExplainRequest()) {
+                if (pplQueryRequest.isExplainRequest()) {
                   LOG.error("Error happened during explain (status {})", status, e);
                 } else {
                   LOG.error("Error happened during query handling (status {})", status, e);
@@ -134,6 +131,27 @@ public class RestPPLQueryAction extends BaseRestHandler {
                 reportError(channel, e, status);
               }
             });
+  }
+
+  /**
+   * Map a legacy {@link org.opensearch.sql.ppl.domain.PPLQueryRequest} onto the commons wire DTO.
+   */
+  private static PPLQueryRequest toCommonsRequest(
+      org.opensearch.sql.ppl.domain.PPLQueryRequest legacy) {
+    String jsonContentRaw =
+        legacy.getJsonContent() == null ? null : legacy.getJsonContent().toString();
+    PPLQueryRequest commons =
+        new PPLQueryRequest(
+            legacy.getRequest(),
+            jsonContentRaw,
+            legacy.getPath(),
+            legacy.getFormat(),
+            legacy.mode().getModeName(),
+            legacy.profile());
+    commons.sanitize(legacy.sanitize());
+    commons.style(Style.valueOf(legacy.style().name()));
+    commons.queryId(legacy.queryId());
+    return commons;
   }
 
   private void sendResponse(

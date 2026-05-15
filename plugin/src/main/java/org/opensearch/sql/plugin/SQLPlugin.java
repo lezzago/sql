@@ -63,6 +63,11 @@ import org.opensearch.script.ScriptEngine;
 import org.opensearch.script.ScriptService;
 import org.opensearch.sql.ast.statement.ExplainMode;
 import org.opensearch.sql.common.response.ResponseListener;
+import org.opensearch.sql.commons.transport.directquery.ExecuteDirectQueryAction;
+import org.opensearch.sql.commons.transport.directquery.GetDirectQueryResourcesAction;
+import org.opensearch.sql.commons.transport.directquery.WriteDirectQueryResourcesAction;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryAction;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryResponse;
 import org.opensearch.sql.datasource.DataSourceService;
 import org.opensearch.sql.datasources.auth.DataSourceUserAuthorizationHelper;
 import org.opensearch.sql.datasources.auth.DataSourceUserAuthorizationHelperImpl;
@@ -90,9 +95,6 @@ import org.opensearch.sql.directquery.transport.TransportExecuteDirectQueryReque
 import org.opensearch.sql.directquery.transport.TransportGetDirectQueryResourcesRequestAction;
 import org.opensearch.sql.directquery.transport.TransportWriteDirectQueryResourcesRequestAction;
 import org.opensearch.sql.directquery.transport.config.DirectQueryModule;
-import org.opensearch.sql.directquery.transport.model.ExecuteDirectQueryActionResponse;
-import org.opensearch.sql.directquery.transport.model.ReadDirectQueryResourcesActionResponse;
-import org.opensearch.sql.directquery.transport.model.WriteDirectQueryResourcesActionResponse;
 import org.opensearch.sql.executor.ExecutionEngine;
 import org.opensearch.sql.executor.ExecutionEngine.ExplainResponse;
 import org.opensearch.sql.executor.QueryType;
@@ -112,9 +114,7 @@ import org.opensearch.sql.plugin.rest.RestPPLQueryAction;
 import org.opensearch.sql.plugin.rest.RestPPLStatsAction;
 import org.opensearch.sql.plugin.rest.RestQuerySettingsAction;
 import org.opensearch.sql.plugin.rest.RestUnifiedQueryAction;
-import org.opensearch.sql.plugin.transport.PPLQueryAction;
 import org.opensearch.sql.plugin.transport.TransportPPLQueryAction;
-import org.opensearch.sql.plugin.transport.TransportPPLQueryResponse;
 import org.opensearch.sql.prometheus.storage.PrometheusStorageFactory;
 import org.opensearch.sql.protocol.response.format.JsonResponseFormatter;
 import org.opensearch.sql.protocol.response.format.JsonResponseFormatter.Style;
@@ -274,7 +274,7 @@ public class SQLPlugin extends Plugin
             false,
             new ActionListener<>() {
               @Override
-              public void onResponse(TransportPPLQueryResponse response) {
+              public void onResponse(PPLQueryResponse response) {
                 channel.sendResponse(
                     new BytesRestResponse(
                         RestStatus.OK, "application/json; charset=UTF-8", response.getResult()));
@@ -296,7 +296,7 @@ public class SQLPlugin extends Plugin
   public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
     return Arrays.asList(
         new ActionHandler<>(
-            new ActionType<>(PPLQueryAction.NAME, TransportPPLQueryResponse::new),
+            new ActionType<>(PPLQueryAction.NAME, PPLQueryResponse::new),
             TransportPPLQueryAction.class),
         new ActionHandler<>(
             new ActionType<>(
@@ -330,19 +330,12 @@ public class SQLPlugin extends Plugin
                 TransportCancelAsyncQueryRequestAction.NAME, CancelAsyncQueryActionResponse::new),
             TransportCancelAsyncQueryRequestAction.class),
         new ActionHandler<>(
-            new ActionType<>(
-                TransportExecuteDirectQueryRequestAction.NAME,
-                ExecuteDirectQueryActionResponse::new),
-            TransportExecuteDirectQueryRequestAction.class),
+            ExecuteDirectQueryAction.INSTANCE, TransportExecuteDirectQueryRequestAction.class),
         new ActionHandler<>(
-            new ActionType<>(
-                TransportGetDirectQueryResourcesRequestAction.NAME,
-                ReadDirectQueryResourcesActionResponse::new),
+            GetDirectQueryResourcesAction.INSTANCE,
             TransportGetDirectQueryResourcesRequestAction.class),
         new ActionHandler<>(
-            new ActionType<>(
-                TransportWriteDirectQueryResourcesRequestAction.NAME,
-                WriteDirectQueryResourcesActionResponse::new),
+            WriteDirectQueryResourcesAction.INSTANCE,
             TransportWriteDirectQueryResourcesRequestAction.class));
   }
 

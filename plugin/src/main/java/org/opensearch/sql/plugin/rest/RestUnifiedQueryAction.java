@@ -37,11 +37,11 @@ import org.opensearch.sql.ast.tree.UnresolvedPlan;
 import org.opensearch.sql.calcite.CalcitePlanContext;
 import org.opensearch.sql.calcite.plan.rel.LogicalSystemLimit;
 import org.opensearch.sql.common.response.ResponseListener;
+import org.opensearch.sql.commons.transport.ppl.PPLQueryResponse;
 import org.opensearch.sql.executor.ExecutionEngine.QueryResponse;
 import org.opensearch.sql.executor.QueryType;
 import org.opensearch.sql.executor.analytics.AnalyticsExecutionEngine;
 import org.opensearch.sql.lang.LangSpec;
-import org.opensearch.sql.plugin.transport.TransportPPLQueryResponse;
 import org.opensearch.sql.protocol.response.QueryResult;
 import org.opensearch.sql.protocol.response.format.ResponseFormatter;
 import org.opensearch.sql.protocol.response.format.SimpleJsonResponseFormatter;
@@ -118,7 +118,7 @@ public class RestUnifiedQueryAction {
       String query,
       QueryType queryType,
       boolean profiling,
-      ActionListener<TransportPPLQueryResponse> listener) {
+      ActionListener<PPLQueryResponse> listener) {
     client
         .threadPool()
         .schedule(
@@ -260,7 +260,7 @@ public class RestUnifiedQueryAction {
   }
 
   private ResponseListener<QueryResponse> createQueryListener(
-      QueryType queryType, ActionListener<TransportPPLQueryResponse> transportListener) {
+      QueryType queryType, ActionListener<PPLQueryResponse> transportListener) {
     ResponseFormatter<QueryResult> formatter = new SimpleJsonResponseFormatter(PRETTY);
     return new ResponseListener<QueryResponse>() {
       @Override
@@ -270,7 +270,7 @@ public class RestUnifiedQueryAction {
             formatter.format(
                 new QueryResult(
                     response.getSchema(), response.getResults(), response.getCursor(), langSpec));
-        transportListener.onResponse(new TransportPPLQueryResponse(result));
+        transportListener.onResponse(new PPLQueryResponse(result));
       }
 
       @Override

@@ -9,7 +9,10 @@ import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
 import static org.opensearch.rest.RestRequest.Method.POST;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -25,15 +28,18 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.sql.commons.transport.directquery.DirectQueryResultEntry;
+import org.opensearch.sql.commons.transport.directquery.ExecuteDirectQueryResponse;
 import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.datasource.client.exceptions.DataSourceClientException;
 import org.opensearch.sql.datasources.exceptions.ErrorMessage;
 import org.opensearch.sql.datasources.utils.Scheduler;
 import org.opensearch.sql.directquery.rest.model.ExecuteDirectQueryRequest;
 import org.opensearch.sql.directquery.transport.TransportExecuteDirectQueryRequestAction;
+import org.opensearch.sql.directquery.transport.format.DirectQueryCommonsConverter;
 import org.opensearch.sql.directquery.transport.format.DirectQueryRequestConverter;
-import org.opensearch.sql.directquery.transport.model.ExecuteDirectQueryActionRequest;
-import org.opensearch.sql.directquery.transport.model.ExecuteDirectQueryActionResponse;
+import org.opensearch.sql.directquery.transport.model.datasource.DataSourceResult;
+import org.opensearch.sql.directquery.transport.model.datasource.PrometheusResult;
 import org.opensearch.sql.directquery.validator.DirectQueryRequestValidator;
 import org.opensearch.sql.opensearch.setting.OpenSearchSettings;
 import org.opensearch.sql.opensearch.util.RestRequestUtil;
@@ -52,6 +58,8 @@ public class RestDirectQueryManagementAction extends BaseRestHandler {
       "/_plugins/_directquery/_query/{dataSources}";
 
   private static final Logger LOG = LogManager.getLogger(RestDirectQueryManagementAction.class);
+  private static final ObjectMapper OBJECT_MAPPER =
+      new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
   private final OpenSearchSettings settings;
 
   @Override
@@ -110,10 +118,10 @@ public class RestDirectQueryManagementAction extends BaseRestHandler {
             () ->
                 nodeClient.execute(
                     TransportExecuteDirectQueryRequestAction.ACTION_TYPE,
-                    new ExecuteDirectQueryActionRequest(directQueryRequest),
+                    DirectQueryCommonsConverter.fromLegacy(directQueryRequest),
                     new ActionListener<>() {
                       @Override
-                      public void onResponse(ExecuteDirectQueryActionResponse response) {
+                      public void onResponse(ExecuteDirectQueryResponse response) {
                         // Format the response here at the REST layer using JsonResponseFormatter
                         String formattedResponse = formatDirectQueryResponse(response);
                         restChannel.sendResponse(
@@ -135,22 +143,47 @@ public class RestDirectQueryManagementAction extends BaseRestHandler {
   }
 
   /** Format the direct query response using JsonResponseFormatter */
-  private String formatDirectQueryResponse(ExecuteDirectQueryActionResponse response) {
+  private String formatDirectQueryResponse(ExecuteDirectQueryResponse response) {
     try {
+      Map<String, DataSourceResult> typedResults = decodeResults(response);
       // Create a formatter that converts the response to a pretty JSON format
-      return new JsonResponseFormatter<ExecuteDirectQueryActionResponse>(
+      return new JsonResponseFormatter<ExecuteDirectQueryResponse>(
           JsonResponseFormatter.Style.PRETTY) {
         @Override
-        protected Object buildJsonObject(ExecuteDirectQueryActionResponse response) {
-          // Create a response object with the fields we want to expose
-          return new DirectQueryResult(
-              response.getQueryId(), response.getResults(), response.getSessionId());
+        protected Object buildJsonObject(ExecuteDirectQueryResponse response) {
+          return new DirectQueryResult(response.getQueryId(), typedResults, response.getSessionId());
         }
       }.format(response);
     } catch (Exception e) {
       LOG.error("Error formatting direct query response", e);
       return "{\"error\": \"" + e.getMessage() + "\"}";
     }
+  }
+
+  /** Decode opaque commons result entries back into typed {@link DataSourceResult} POJOs. */
+  private static Map<String, DataSourceResult> decodeResults(ExecuteDirectQueryResponse response) {
+    Map<String, DataSourceResult> decoded = new HashMap<>();
+    for (Map.Entry<String, DirectQueryResultEntry> entry : response.getResults().entrySet()) {
+      DirectQueryResultEntry value = entry.getValue();
+      String type = value.getType() == null ? "" : value.getType().toLowerCase();
+      try {
+        if ("prometheus".equals(type)) {
+          // The @JsonTypeInfo on DataSourceResult requires a "type" property to resolve the
+          // subtype. Inject it for raw payloads that didn't include the type field.
+          String json = value.getJson();
+          if (json != null && !json.contains("\"type\":")) {
+            json = json.replaceFirst("\\{", "{\"type\":\"" + type + "\",");
+          }
+          decoded.put(entry.getKey(), OBJECT_MAPPER.readValue(json, PrometheusResult.class));
+        } else {
+          throw new IllegalStateException("Unsupported data source type: " + value.getType());
+        }
+      } catch (Exception e) {
+        throw new IllegalStateException(
+            "Failed to decode result for data source " + entry.getKey() + ": " + e.getMessage(), e);
+      }
+    }
+    return decoded;
   }
 
   /** Simple class to represent the formatted response */

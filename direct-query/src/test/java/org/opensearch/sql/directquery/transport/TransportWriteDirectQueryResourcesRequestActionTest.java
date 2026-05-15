@@ -8,8 +8,6 @@ package org.opensearch.sql.directquery.transport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -24,64 +22,58 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.sql.directquery.DirectQueryExecutorService;
+import org.opensearch.sql.commons.transport.directquery.DirectQueryResourceType;
+import org.opensearch.sql.commons.transport.directquery.WriteDirectQueryResourcesRequest;
+import org.opensearch.sql.commons.transport.directquery.WriteDirectQueryResourcesResponse;
 import org.opensearch.sql.directquery.DirectQueryExecutorServiceImpl;
-import org.opensearch.sql.directquery.rest.model.DirectQueryResourceType;
-import org.opensearch.sql.directquery.rest.model.WriteDirectQueryResourcesRequest;
-import org.opensearch.sql.directquery.rest.model.WriteDirectQueryResourcesResponse;
-import org.opensearch.sql.directquery.transport.model.WriteDirectQueryResourcesActionRequest;
-import org.opensearch.sql.directquery.transport.model.WriteDirectQueryResourcesActionResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
 @ExtendWith(MockitoExtension.class)
 public class TransportWriteDirectQueryResourcesRequestActionTest {
 
-  @Mock
-  private TransportService transportService;
+  @Mock private TransportService transportService;
 
-  @Mock
-  private ActionFilters actionFilters;
+  @Mock private ActionFilters actionFilters;
 
-  @Mock
-  private DirectQueryExecutorServiceImpl directQueryExecutorService;
+  @Mock private DirectQueryExecutorServiceImpl directQueryExecutorService;
 
-  @Mock
-  private Task task;
+  @Mock private Task task;
 
   private TransportWriteDirectQueryResourcesRequestAction action;
 
   @BeforeEach
   public void setUp() {
-    action = new TransportWriteDirectQueryResourcesRequestAction(
-        transportService, actionFilters, directQueryExecutorService);
+    action =
+        new TransportWriteDirectQueryResourcesRequestAction(
+            transportService, actionFilters, directQueryExecutorService);
   }
 
   @Test
   public void testDoExecuteSuccessful() throws Exception {
-    WriteDirectQueryResourcesRequest directQueryRequest = new WriteDirectQueryResourcesRequest();
-    directQueryRequest.setDataSource("testDataSource");
-    directQueryRequest.setResourceType(DirectQueryResourceType.ALERTMANAGER_SILENCES);
-    directQueryRequest.setRequest("{\"matchers\":[{\"name\":\"alertname\",\"value\":\"TestAlert\"}],\"comment\":\"Test silence\"}");
+    WriteDirectQueryResourcesRequest commonsRequest = new WriteDirectQueryResourcesRequest();
+    commonsRequest.setDataSource("testDataSource");
+    commonsRequest.setResourceType(DirectQueryResourceType.ALERTMANAGER_SILENCES);
+    commonsRequest.setRequest(
+        "{\"matchers\":[{\"name\":\"alertname\",\"value\":\"TestAlert\"}],\"comment\":\"Test"
+            + " silence\"}");
 
-    WriteDirectQueryResourcesActionRequest actionRequest =
-        new WriteDirectQueryResourcesActionRequest(directQueryRequest);
+    org.opensearch.sql.directquery.rest.model.WriteDirectQueryResourcesResponse serviceResponse =
+        org.opensearch.sql.directquery.rest.model.WriteDirectQueryResourcesResponse.withStringList(
+            Arrays.asList("silence-12345"));
 
-    WriteDirectQueryResourcesResponse serviceResponse =
-        WriteDirectQueryResourcesResponse.withStringList(Arrays.asList("silence-12345"));
-
-    when(directQueryExecutorService.writeDirectQueryResources(directQueryRequest))
+    when(directQueryExecutorService.writeDirectQueryResources(
+            any(org.opensearch.sql.directquery.rest.model.WriteDirectQueryResourcesRequest.class)))
         .thenReturn(serviceResponse);
 
     CountDownLatch latch = new CountDownLatch(1);
-    AtomicReference<WriteDirectQueryResourcesActionResponse> responseRef =
-        new AtomicReference<>();
+    AtomicReference<WriteDirectQueryResourcesResponse> responseRef = new AtomicReference<>();
     AtomicReference<Exception> exceptionRef = new AtomicReference<>();
 
-    ActionListener<WriteDirectQueryResourcesActionResponse> listener =
-        new ActionListener<WriteDirectQueryResourcesActionResponse>() {
+    ActionListener<WriteDirectQueryResourcesResponse> listener =
+        new ActionListener<>() {
           @Override
-          public void onResponse(WriteDirectQueryResourcesActionResponse response) {
+          public void onResponse(WriteDirectQueryResourcesResponse response) {
             responseRef.set(response);
             latch.countDown();
           }
@@ -93,37 +85,36 @@ public class TransportWriteDirectQueryResourcesRequestActionTest {
           }
         };
 
-    action.doExecute(task, actionRequest, listener);
+    action.doExecute(task, commonsRequest, listener);
 
     latch.await(5, TimeUnit.SECONDS);
 
     assertNotNull(responseRef.get());
     assertEquals(0, latch.getCount());
-    verify(directQueryExecutorService).writeDirectQueryResources(directQueryRequest);
+    verify(directQueryExecutorService)
+        .writeDirectQueryResources(
+            any(org.opensearch.sql.directquery.rest.model.WriteDirectQueryResourcesRequest.class));
   }
 
   @Test
   public void testDoExecuteWithException() throws Exception {
-    WriteDirectQueryResourcesRequest directQueryRequest = new WriteDirectQueryResourcesRequest();
-    directQueryRequest.setDataSource("testDataSource");
-    directQueryRequest.setResourceType(DirectQueryResourceType.ALERTMANAGER_SILENCES);
-
-    WriteDirectQueryResourcesActionRequest actionRequest =
-        new WriteDirectQueryResourcesActionRequest(directQueryRequest);
+    WriteDirectQueryResourcesRequest commonsRequest = new WriteDirectQueryResourcesRequest();
+    commonsRequest.setDataSource("testDataSource");
+    commonsRequest.setResourceType(DirectQueryResourceType.ALERTMANAGER_SILENCES);
 
     RuntimeException testException = new RuntimeException("Test exception");
-    when(directQueryExecutorService.writeDirectQueryResources(directQueryRequest))
+    when(directQueryExecutorService.writeDirectQueryResources(
+            any(org.opensearch.sql.directquery.rest.model.WriteDirectQueryResourcesRequest.class)))
         .thenThrow(testException);
 
     CountDownLatch latch = new CountDownLatch(1);
-    AtomicReference<WriteDirectQueryResourcesActionResponse> responseRef =
-        new AtomicReference<>();
+    AtomicReference<WriteDirectQueryResourcesResponse> responseRef = new AtomicReference<>();
     AtomicReference<Exception> exceptionRef = new AtomicReference<>();
 
-    ActionListener<WriteDirectQueryResourcesActionResponse> listener =
-        new ActionListener<WriteDirectQueryResourcesActionResponse>() {
+    ActionListener<WriteDirectQueryResourcesResponse> listener =
+        new ActionListener<>() {
           @Override
-          public void onResponse(WriteDirectQueryResourcesActionResponse response) {
+          public void onResponse(WriteDirectQueryResourcesResponse response) {
             responseRef.set(response);
             latch.countDown();
           }
@@ -135,13 +126,15 @@ public class TransportWriteDirectQueryResourcesRequestActionTest {
           }
         };
 
-    action.doExecute(task, actionRequest, listener);
+    action.doExecute(task, commonsRequest, listener);
 
     latch.await(5, TimeUnit.SECONDS);
 
     assertNotNull(exceptionRef.get());
     assertEquals(testException, exceptionRef.get());
     assertEquals(0, latch.getCount());
-    verify(directQueryExecutorService).writeDirectQueryResources(directQueryRequest);
+    verify(directQueryExecutorService)
+        .writeDirectQueryResources(
+            any(org.opensearch.sql.directquery.rest.model.WriteDirectQueryResourcesRequest.class));
   }
 }

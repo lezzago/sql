@@ -31,11 +31,10 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestResponse;
+import org.opensearch.sql.commons.transport.directquery.DirectQueryResultEntry;
+import org.opensearch.sql.commons.transport.directquery.ExecuteDirectQueryResponse;
 import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.datasource.client.exceptions.DataSourceClientException;
-import org.opensearch.sql.directquery.transport.model.ExecuteDirectQueryActionResponse;
-import org.opensearch.sql.directquery.transport.model.datasource.DataSourceResult;
-import org.opensearch.sql.directquery.transport.model.datasource.PrometheusResult;
 import org.opensearch.sql.opensearch.setting.OpenSearchSettings;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.node.NodeClient;
@@ -180,13 +179,12 @@ public class RestDirectQueryManagementActionTest {
   @Test
   @SneakyThrows
   public void testSuccessfulResponse() {
-    PrometheusResult prometheusResult = new PrometheusResult();
-
-    Map<String, DataSourceResult> resultsMap = new HashMap<>();
-    resultsMap.put("testDataSource", prometheusResult);
-
-    ExecuteDirectQueryActionResponse response =
-        new ExecuteDirectQueryActionResponse("test-query-id", resultsMap, "test-session-id");
+    Map<String, DirectQueryResultEntry> entries = new HashMap<>();
+    entries.put(
+        "testDataSource",
+        new DirectQueryResultEntry("prometheus", "{\"resultType\":\"vector\",\"result\":[]}"));
+    ExecuteDirectQueryResponse response =
+        new ExecuteDirectQueryResponse("test-query-id", entries, "test-session-id");
 
     ActionListener listener =
         makeRequest(
@@ -210,20 +208,11 @@ public class RestDirectQueryManagementActionTest {
   @Test
   @SneakyThrows
   public void testFormatDirectQueryResponseError() {
-    // this fails and triggers format error because mocked class can't be serialized
-    PrometheusResult mockPrometheusResult = Mockito.mock(PrometheusResult.class);
-
-    Map<String, DataSourceResult> resultsMap = new HashMap<>();
-    resultsMap.put("testDataSource", mockPrometheusResult);
-
-    ExecuteDirectQueryActionResponse response =
-        Mockito.mock(ExecuteDirectQueryActionResponse.class);
-    Mockito.when(response.getResults()).thenReturn(resultsMap);
-
-    String expectedJson = "{\"testDataSource\":{}}"; // Simple representation
-
-    ObjectMapper mockMapper = Mockito.mock(ObjectMapper.class);
-    Mockito.when(mockMapper.writeValueAsString(resultsMap)).thenReturn(expectedJson);
+    // Trigger a format error by passing a result with an unsupported data source type.
+    Map<String, DirectQueryResultEntry> entries = new HashMap<>();
+    entries.put("testDataSource", new DirectQueryResultEntry("not-a-real-source", "{}"));
+    ExecuteDirectQueryResponse response =
+        new ExecuteDirectQueryResponse("qid", entries, "sess");
 
     ActionListener listener =
         makeRequest(
