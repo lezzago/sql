@@ -21,9 +21,9 @@ import org.opensearch.core.common.io.stream.StreamOutput;
  * writeOptionalString(resourceName); writeOptionalString(request); writeMap(requestOptions, String,
  * String); writeOptionalString(groupName); writeOptionalBoolean(delete);}
  *
- * <p>Note: parent {@code super.writeTo} is intentionally not called on the write side to preserve
- * byte-compatibility with the prior {@code WriteDirectQueryResourcesActionRequest} which also
- * skipped it.
+ * <p>Note: parent {@code super(in)} / {@code super.writeTo} are intentionally skipped on both
+ * sides to preserve byte-compatibility with the prior {@code WriteDirectQueryResourcesActionRequest}
+ * which also skipped both. {@link GetDirectQueryResourcesRequest} calls them on both sides.
  */
 @Getter
 @Setter
@@ -41,6 +41,7 @@ public class WriteDirectQueryResourcesRequest extends ActionRequest {
   }
 
   public WriteDirectQueryResourcesRequest(StreamInput in) throws IOException {
+    // Intentionally not calling super(in) — see class Javadoc.
     this.dataSource = in.readOptionalString();
     String resourceTypeStr = in.readOptionalString();
     this.resourceType =

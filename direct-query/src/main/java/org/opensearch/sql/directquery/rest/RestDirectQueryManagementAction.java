@@ -10,10 +10,14 @@ import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
 import static org.opensearch.rest.RestRequest.Method.POST;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableList;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import lombok.Getter;
@@ -165,16 +169,10 @@ public class RestDirectQueryManagementAction extends BaseRestHandler {
     Map<String, DataSourceResult> decoded = new HashMap<>();
     for (Map.Entry<String, DirectQueryResultEntry> entry : response.getResults().entrySet()) {
       DirectQueryResultEntry value = entry.getValue();
-      String type = value.getType() == null ? "" : value.getType().toLowerCase();
+      String type = value.getType() == null ? "" : value.getType().toLowerCase(Locale.ROOT);
       try {
         if ("prometheus".equals(type)) {
-          // The @JsonTypeInfo on DataSourceResult requires a "type" property to resolve the
-          // subtype. Inject it for raw payloads that didn't include the type field.
-          String json = value.getJson();
-          if (json != null && !json.contains("\"type\":")) {
-            json = json.replaceFirst("\\{", "{\"type\":\"" + type + "\",");
-          }
-          decoded.put(entry.getKey(), OBJECT_MAPPER.readValue(json, PrometheusResult.class));
+          decoded.put(entry.getKey(), OBJECT_MAPPER.treeToValue(withType(value.getJson(), type), PrometheusResult.class));
         } else {
           throw new IllegalStateException("Unsupported data source type: " + value.getType());
         }
@@ -184,6 +182,22 @@ public class RestDirectQueryManagementAction extends BaseRestHandler {
       }
     }
     return decoded;
+  }
+
+  /**
+   * Parse {@code json} and ensure the {@code type} discriminator required by {@code @JsonTypeInfo}
+   * on {@link DataSourceResult} is set. Existing {@code type} values are preserved.
+   */
+  private static JsonNode withType(String json, String type) throws IOException {
+    JsonNode node = json == null ? OBJECT_MAPPER.createObjectNode() : OBJECT_MAPPER.readTree(json);
+    if (!(node instanceof ObjectNode)) {
+      throw new IllegalStateException("Expected JSON object, got: " + node.getNodeType());
+    }
+    ObjectNode obj = (ObjectNode) node;
+    if (!obj.has("type")) {
+      obj.put("type", type);
+    }
+    return obj;
   }
 
   /** Simple class to represent the formatted response */
